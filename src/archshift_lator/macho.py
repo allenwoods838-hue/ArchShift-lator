@@ -103,7 +103,7 @@ def inspect_macho(path: str | Path) -> MachOInfo:
                 stream.seek(ent[2])
                 slice_head = stream.read(4096)
                 if slice_head[:4] in THIN_MAGICS:
-                    _parse_thin(stream, slice_head, info)
+                    _parse_thin(stream, slice_head, info, ent[2])
                     break
             if count == 0:
                 raise MachOError("Fat Mach-O architecture table is empty")
@@ -114,7 +114,7 @@ def inspect_macho(path: str | Path) -> MachOInfo:
     return info
 
 
-def _parse_thin(stream: BinaryIO, head: bytes, info: MachOInfo) -> None:
+def _parse_thin(stream: BinaryIO, head: bytes, info: MachOInfo, base_offset: int = 0) -> None:
     endian, is64 = THIN_MAGICS[head[:4]]
     header_size = 32 if is64 else 28
     if len(head) < header_size:
@@ -130,7 +130,7 @@ def _parse_thin(stream: BinaryIO, head: bytes, info: MachOInfo) -> None:
     info.load_commands = ncmds
     if ncmds > 100_000 or sizeofcmds > info.file_size:
         raise MachOError("Invalid load-command table size")
-    stream.seek(header_size)
+    stream.seek(base_offset + header_size)
     commands = stream.read(sizeofcmds)
     cursor = 0
     for _ in range(ncmds):
