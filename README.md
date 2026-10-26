@@ -18,7 +18,7 @@ Python 3.10+ is required. The CLI has no third-party runtime dependency. Tkinter
 
     python3 -m venv .venv
     source .venv/bin/activate
-    python -m pip install -e .
+    python -m pip install -e ".[runtime]"
     archshift-lator --help
 
 ## Maclator-first fallback
@@ -37,7 +37,19 @@ The fallback does not silently execute an ARM64 app, rewrite the bundle, remove 
     archshift-lator inspect TARGET
     archshift-lator run TARGET
     archshift-lator lab d28000a0 91000400 d65f03c0
+    archshift-lator emulate-code raw-arm64.bin
     archshift-lator gui
+
+
+## Expanded CPU execution prototype
+
+Install the optional Unicorn runtime with `python -m pip install -e ".[runtime]"`. The `emulate-code` command can execute a **raw little-endian ARM64 machine-code blob** and provides a small Darwin SVC shim for `exit` and `write`. This uses an established ARM64 emulator as a CPU backend; it is not yet a dynamic binary translator and does not load or run a full `.app` bundle. The existing `lab` command remains a tiny pure-Python interpreter useful for debugging a few instructions.
+
+Example: assemble or otherwise produce a raw ARM64 instruction blob, then run:
+
+    archshift-lator emulate-code ./program.arm64.bin
+
+The runtime is deliberately strict: unknown Darwin syscalls stop execution; it does not fake success for missing OS services. Use only trusted guest code.
 
 ## Safety and roadmap
 
