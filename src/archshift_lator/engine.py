@@ -1,9 +1,4 @@
-"""Maclator-override and bundled native-engine dispatch.
-
-The bundled runtime is an attributed native backend under native/. If it is not
-built, the Python front end falls back to diagnostics and the optional raw-code
-emulator; it never reports an app launch as successful without process exit 0.
-"""
+"""Maclator-first dispatch with ArchShift-lator native fallback."""
 from __future__ import annotations
 from dataclasses import dataclass
 import os
@@ -28,12 +23,11 @@ def _native_candidates() -> list[str]:
     override = os.environ.get("ARCHSHIFT_LATOR_NATIVE_ENGINE", "").strip()
     if override:
         candidates.append(override)
-    project_root = Path(__file__).resolve().parents[2]
-    candidates.append(str(project_root / "native" / "target" / "release" / "archshift-lator-native"))
+    root = Path(__file__).resolve().parents[2]
+    candidates.append(str(root / "native" / "target" / "release" / "archshift-lator-native"))
     on_path = shutil.which("archshift-lator-native")
     if on_path:
         candidates.append(on_path)
-    # De-duplicate while retaining preference order.
     return list(dict.fromkeys(candidates))
 
 
@@ -52,10 +46,7 @@ def _run(argv: list[str], label: str) -> EngineResult:
     except OSError as exc:
         return EngineResult(True, False, f"Could not start {label}: {exc}")
     success = completed.returncode == 0
-    message = (
-        f"{label} exited successfully."
-        if success else f"{label} exited with status {completed.returncode}."
-    )
+    message = f"{label} exited successfully." if success else f"{label} exited with status {completed.returncode}."
     return EngineResult(
         True, success, message, completed.returncode,
         completed.stdout[-12000:], completed.stderr[-12000:]
@@ -81,61 +72,77 @@ def _run_native(target: str | Path) -> EngineResult:
         return _run(argv, "ArchShift-lator native engine")
     return EngineResult(
         False, False,
-        "Bundled native engine is not built or not found. Build it with "
+        "ArchShift-lator native engine is not built or not found. Build it with "
         "'cd native && cargo build --release -p maclator'."
     )
 
 
+def _run_configured_maclator(raw: str, target_path: str) -> EngineResult:
+    try:
+        template = shlex.split(raw)
+    except ValueError as exc:
+        return EngineResult(True, False, f"Invalid ARCHSHIFT_MACLATOR_COMMAND: {exc}")
+    if not template or not any("{target}" in item for item in template):
+        return EngineResult(True, False, "Configured Maclator command must include the {target} placeholder.")
+    executable = shutil.which(template[0])
+    if executable is None and Path(template[0]).expanduser().is_file():
+        executable = str(Path(template[0]).expanduser().resolve())
+    if executable is None:
+        return EngineResult(True, False, f"Configured Maclator executable not found: {template[0]}")
+    argv = [item.replace("{target}", target_path) for item in template]
+    argv[0] = executable
+    return _run(argv, "Configured Maclator command")
+
+
 def try_external_engine(target: str | Path) -> EngineResult:
-    """Try an explicitly configured engine, then the bundled ArchShift engine."""
+    """Try configured or discovered Maclator first, then bundled ArchShift-lator."""
     target_path = str(Path(target).expanduser().resolve())
     failures: list[str] = []
     captured_out: list[str] = []
     captured_err: list[str] = []
 
-    raw = os.environ.get("ARCHSHIFT_MACLATOR_COMMAND", "").strip()
-    if raw:
-        try:
-            template = shlex.split(raw)
-        except ValueError as exc:
-            failures.append(f"Invalid ARCHSHIFT_MACLATOR_COMMAND: {exc}")
-            template = []
-        if template:
-            if not any("{target}" in item for item in template):
-                failures.append("External command template must include the {target} placeholder.")
-            else:
-                executable = shutil.which(template[0])
-                if executable is None and Path(template[0]).expanduser().is_file():
-                    executable = str(Path(template[0]).expanduser().resolve())
-                if executable is None:
-                    failures.append(f"External engine executable not found: {template[0]}")
-                else:
-                    argv = [item.replace("{target}", target_path) for item in template]
-                    argv[0] = executable
-                    external = _run(argv, "Configured external engine")
-                    if external.success:
-                        return external
-                    failures.append(external.message)
-                    if external.stdout:
-                        captured_out.append(external.stdout)
-                    if external.stderr:
-                        captured_err.append(external.stderr)
+    configured = os.environ.get("ARCHSHIFT_MACLATOR_COMMAND", "").strip()
+    if configured:
+        maclator = _run_configured_maclator(configured, target_path)
+        if maclator.success:
+            return maclator
+        failures.append(maclator.message)
+        if maclator.stdout:
+            captured_out.append(maclator.stdout)
+        if maclator.stderr:
+            captured_err.append(maclator.stderr)
+    else:
+        # Maclator's documented CLI is: maclator [options] <arm64-program>.
+        maclator_exe = shutil.which("maclator")
+        if maclator_exe:
+            maclator = _run([maclator_exe, target_path], "Maclator")
+            if maclator.success:
+                return maclator
+            failures.append(maclator.message)
+            if maclator.stdout:
+                captured_out.append(maclator.stdout)
+            if maclator.stderr:
+                captured_err.append(maclator.stderr)
+        else:
+            failures.append("Maclator executable was not found on PATH.")
 
     native = _run_native(target)
     if native.success:
-        if failures:
-            native.message = "; ".join(failures) + "; bundled native engine succeeded."
-            native.stdout = "\n".join(captured_out + ([native.stdout] if native.stdout else []))[-12000:]
-            native.stderr = "\n".join(captured_err + ([native.stderr] if native.stderr else []))[-12000:]
+        prefix = "; ".join(failures)
+        native.message = f"{prefix}; ArchShift-lator fallback succeeded." if prefix else native.message
+        native.stdout = "\n".join(captured_out + ([native.stdout] if native.stdout else []))[-12000:]
+        native.stderr = "\n".join(captured_err + ([native.stderr] if native.stderr else []))[-12000:]
         return native
+
     failures.append(native.message)
     if native.stdout:
         captured_out.append(native.stdout)
     if native.stderr:
         captured_err.append(native.stderr)
     return EngineResult(
-        bool(raw) or native.configured, False,
-        "No execution engine succeeded: " + " ".join(failures),
+        True, False,
+        "Maclator failed or was unavailable, and ArchShift-lator could not launch the target. "
+        + " ".join(failures),
         native.returncode,
         "\n".join(captured_out)[-12000:],
         "\n".join(captured_err)[-12000:]
