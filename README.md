@@ -27,10 +27,11 @@ cd native
 cargo build --release -p maclator
 cd ..
 archshift-lator --help
+archshift-lator doctor
 archshift-lator run /Applications/Example.app
 ```
 
-The native executable is built as `native/target/release/archshift-lator-native`. The Python command auto-discovers that file, or an installed `archshift-lator-native` on `PATH`. To install it under `~/bin`, run:
+The native executable is built as `native/target/release/archshift-lator-native`. The build includes the native runtime source under `native/crates/`; upstream notices are preserved. Optional Metal bridge sources are included under `native/gpu/`. The Python command auto-discovers that file, or an installed `archshift-lator-native` on `PATH`. To install it under `~/bin`, run:
 
 ```bash
 ./native/scripts/install-archshift-lator.sh
