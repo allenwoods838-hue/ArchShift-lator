@@ -34,12 +34,12 @@ def _print_inspection(report) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="archshift-lator", description="Maclator-first ARM64 compatibility tools")
+    parser = argparse.ArgumentParser(prog="archshift-lator", description="ArchShift-lator ARM64-on-Intel runtime and developer tools")
     parser.add_argument("--version", action="version", version=f"ArchShift-lator {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
     inspect_cmd = sub.add_parser("inspect", help="Inspect Mach-O files and .app bundles")
     inspect_cmd.add_argument("target")
-    run_cmd = sub.add_parser("run", help="Try configured Maclator, then use ArchShift fallback diagnostics")
+    run_cmd = sub.add_parser("run", help="Try configured engine, then bundled native engine, then fallback diagnostics")
     run_cmd.add_argument("target")
     lab_cmd = sub.add_parser("lab", help="Run supported ARM64 instruction words in the lab")
     lab_cmd.add_argument("words", nargs="+", help="32-bit instruction words in hexadecimal")
