@@ -1,69 +1,81 @@
 # ArchShift-lator
 
-ArchShift lator is a Python-first compatibility frontend for ARM64 macOS apps on Intel Macs. It tries a configured Maclator installation first, then falls back to ArchShift-lator diagnostics and an experimental ARM64 instruction lab when Maclator is unavailable or fails.
+**ArchShift-lator** is a hybrid Python + native macOS runtime project for running ARM64 macOS programs on Intel Macs. The Python CLI/GUI handles inspection, routing, and diagnostics. The project now bundles an attributed native execution engine derived from [linuxkid473/maclator](https://github.com/linuxkid473/maclator), with upstream MIT licensing and NOTICE retained under `native/`.
 
-**Status: experimental developer foundation. It is not yet a drop-in Rosetta 2 replacement.** The fallback inspects Mach-O files and interprets a small, explicit subset of AArch64 instructions. It does not yet translate arbitrary ARM64 macOS applications, bridge Apple frameworks, or make every ARM64 .app runnable.
+This is a working engine integration project, not yet a guarantee that every ARM64 app will launch. The imported native engine was documented and tested on Intel Macs running macOS 26. **macOS 15 support remains unverified**, and the engine may require a guest arm64e dyld and matching system cache.
 
-## Included
+## What is included
 
 - Python CLI and optional Tkinter GUI.
-- Thin and fat/universal Mach-O architecture detection, linked dylibs, and code-signature metadata.
-- Tiny AArch64 lab for NOP, MOVZ, ADD/SUB immediate, and RET.
-- Configurable Maclator command adapter; missing configuration or failure routes to fallback diagnostics.
-- Unit tests and GitHub Actions CI.
+- Native AArch64 interpreter/JIT, Mach-O loader, syscall/trap emulation, AOT cache, and threading/workqueue runtime under `native/`.
+- Automatic discovery of the bundled `archshift-lator-native` binary once it has been built.
+- Optional override to try a separately installed Maclator command first; if it fails, ArchShift-lator tries its bundled engine and then reports fallback diagnostics.
+- Read-only Mach-O architecture inspection and .app bundle scanning.
+- Optional Unicorn ARM64 raw-code emulator and a small Python instruction lab.
+- A small ARM64-to-x86-64 assembly translator for NOP, MOVZ, ADD/SUB-immediate, RET X30 (a development prototype, not a Mach-O application converter).
+- Python tests and a native-engine build workflow.
 
-## Install
+## Build and install
 
-Python 3.10+ is required. The CLI has no third-party runtime dependency. Tkinter is required for the GUI.
+Requirements: Python 3.10+, Rust/Cargo, and Xcode Command Line Tools on an Intel Mac. Tkinter is needed for the desktop GUI.
 
-    python3 -m venv .venv
-    source .venv/bin/activate
-    python -m pip install -e ".[runtime]"
-    archshift-lator --help
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[runtime]"
+cd native
+cargo build --release -p maclator
+cd ..
+archshift-lator --help
+archshift-lator run /Applications/Example.app
+```
 
-## Maclator-first fallback
+The native executable is built as `native/target/release/archshift-lator-native`. The Python command auto-discovers that file, or an installed `archshift-lator-native` on `PATH`. To install it under `~/bin`, run:
 
-Configure the exact CLI invocation supported by your Maclator build. Include {target} where the target path belongs:
+```bash
+./native/scripts/install-archshift-lator.sh
+```
 
-    export ARCHSHIFT_MACLATOR_COMMAND='maclator --your-supported-options {target}'
-    archshift-lator run /path/to/Example.app
+## Older macOS / guest system files
 
-Replace the illustrative options with ones supported by your installed build. ArchShift-lator does not guess undocumented Maclator syntax. The command is invoked without a shell. If it is not configured, its executable is missing, or it exits unsuccessfully, fallback diagnostics run.
+The native engine's documented test target is macOS 26; other host versions are not established as supported. On an Intel Mac where `/usr/lib/dyld` does not contain an arm64e slice, the engine may need a compatible guest dyld and a matching Apple Silicon shared cache:
 
-The fallback does not silently execute an ARM64 app, rewrite the bundle, remove signatures, or claim conversion succeeded. It reports whether an x86_64 slice exists and what the current fallback can actually do.
+```bash
+export ARCHSHIFT_LATOR_DYLD="/path/to/arm64e/dyld"
+export ARCHSHIFT_LATOR_SYSROOT="/path/to/guest/sysroot"
+archshift-lator run /path/to/Example.app
+```
 
-## Commands
+The guest dyld/sysroot must come from an Apple macOS image you are licensed to use. A matching sysroot alone does not guarantee success: guest syscalls and Mach traps must also be compatible with the Intel host kernel. When the native engine exits unsuccessfully, ArchShift-lator reports that failure and the inspection fallback; it does not claim the app ran.
 
-    archshift-lator inspect TARGET
-    archshift-lator run TARGET
-    archshift-lator lab d28000a0 91000400 d65f03c0
-    archshift-lator translate-code raw-arm64.bin -o translated.s
-    archshift-lator emulate-code raw-arm64.bin
-    archshift-lator gui
+## External-engine fallback
 
+By default, the bundled native engine is attempted. To try an existing Maclator installation first, set a command template with an explicit `{target}` placeholder using the syntax supported by that installation:
 
+```bash
+export ARCHSHIFT_MACLATOR_COMMAND='maclator --your-supported-options {target}'
+archshift-lator run /path/to/Example.app
+```
 
-## ARM64-to-x86-64 translation prototype
+The external command is invoked without a shell. If it is unavailable or exits nonzero, the bundled ArchShift-lator engine is attempted next.
 
-`translate-code` reads a **raw ARM64 instruction blob**, translates the currently supported linear subset (NOP, MOVZ, ADD/SUB immediate, and RET X30), and writes Intel-syntax x86-64 assembly. It creates a callable function wrapper that can be assembled on an x86-64 host. Instructions outside the subset are rejected instead of being guessed.
+## Developer commands
 
-    archshift-lator translate-code ./snippet.arm64.bin -o ./snippet.x86_64.s
-    cc -shared -fPIC ./snippet.x86_64.s -o ./snippet.so
+```text
+archshift-lator inspect TARGET
+archshift-lator run TARGET
+archshift-lator lab d28000a0 91000400 d65f03c0
+archshift-lator translate-code raw-arm64.bin -o translated.s
+archshift-lator emulate-code raw-arm64.bin
+archshift-lator gui
+```
 
-This demonstrates real translation for small code sequences, but is not a Mach-O application converter. The full runtime still requires branch/call translation, memory and exception handling, dyld and shared-cache loading, syscall/trap emulation, threading, ABI integration, framework compatibility, and extensive conformance tests.
+The `translate-code` prototype converts only a tiny straight-line subset to x86-64 assembly. `emulate-code` uses optional Unicorn to execute a raw ARM64 blob with a small Darwin `exit`/`write` shim. Neither command is a replacement for Mach-O loading and macOS runtime compatibility.
 
-## Expanded CPU execution prototype
+## What remains for broad compatibility
 
-Install the optional Unicorn runtime with `python -m pip install -e ".[runtime]"`. The `emulate-code` command can execute a **raw little-endian ARM64 machine-code blob** and provides a small Darwin SVC shim for `exit` and `write`. This uses an established ARM64 emulator as a CPU backend; it is not yet a dynamic binary translator and does not load or run a full `.app` bundle. The existing `lab` command remains a tiny pure-Python interpreter useful for debugging a few instructions.
+Even with the native runtime bundled, many apps can fail due to host-OS version mismatch, missing guest userland files, unsupported syscalls/Mach traps, code-signing policy, sandboxing, IOKit, audio, Metal/CAMetalLayer paths, JIT restrictions, or unimplemented instructions. Native source builds are now part of the repository, but app-by-app compatibility and macOS 15 testing remain necessary.
 
-Example: assemble or otherwise produce a raw ARM64 instruction blob, then run:
+## Licensing
 
-    archshift-lator emulate-code ./program.arm64.bin
-
-The runtime is deliberately strict: unknown Darwin syscalls stop execution; it does not fake success for missing OS services. Use only trusted guest code.
-
-## Safety and roadmap
-
-Inspection is read-only. Configure only trusted Maclator executables; do not use untrusted binaries. Test on copies and retain backups.
-
-The remaining work for a real Maclator replacement includes broad instruction coverage, JIT/native code generation, guest memory, Mach-O loading and relocations, exceptions, runtime/syscall boundaries, ABI bridging, and macOS framework compatibility. This project is a foundation for those components, not a claim that arbitrary ARM64 apps already run on Intel.
+The Python glue and project-specific code are in this repository. The native engine source under `native/` is derived from Maclator and retains its upstream [MIT license](native/LICENSE) and [NOTICE](native/NOTICE). See those files and the upstream project for attribution and terms.
