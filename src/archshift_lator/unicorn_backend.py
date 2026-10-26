@@ -9,7 +9,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 try:
-    from unicorn import Uc, UC_ARCH_ARM64, UC_MODE_ARM, UC_HOOK_CODE, UC_ARM64_REG_PC, UC_ARM64_REG_SP, UC_ARM64_REG_X0, UC_ARM64_REG_X1, UC_ARM64_REG_X2, UC_ARM64_REG_X16, UC_ARM64_REG_X30
+    from unicorn import Uc, UC_ARCH_ARM64, UC_MODE_ARM, UC_HOOK_CODE
+    from unicorn.arm64_const import (
+        UC_ARM64_REG_PC, UC_ARM64_REG_SP, UC_ARM64_REG_X0,
+        UC_ARM64_REG_X1, UC_ARM64_REG_X2, UC_ARM64_REG_X16, UC_ARM64_REG_X30,
+    )
 except ImportError as exc:  # keep core CLI usable without optional runtime deps
     Uc = None
     _IMPORT_ERROR = exc
