@@ -8,6 +8,7 @@ from . import __version__
 from .arm64 import UnsupportedInstruction, run_words
 from .fallback import inspect_target, run_with_fallback
 from .unicorn_backend import RuntimeUnavailable, emulate_raw_file
+from .translator import translate_raw_file
 
 
 def _print_inspection(report) -> None:
@@ -42,6 +43,10 @@ def main(argv: list[str] | None = None) -> int:
     run_cmd.add_argument("target")
     lab_cmd = sub.add_parser("lab", help="Run supported ARM64 instruction words in the lab")
     lab_cmd.add_argument("words", nargs="+", help="32-bit instruction words in hexadecimal")
+    trans_cmd = sub.add_parser("translate-code", help="Translate a raw ARM64 block to x86-64 assembly (limited subset)")
+    trans_cmd.add_argument("target", help="Raw little-endian ARM64 bytes, not a Mach-O file")
+    trans_cmd.add_argument("-o", "--output", help="Output assembly path (defaults to TARGET.x86_64.s)")
+    trans_cmd.add_argument("--function-name", default="archshift_guest")
     emu_cmd = sub.add_parser("emulate-code", help="Execute a raw AArch64 machine-code blob with Unicorn")
     emu_cmd.add_argument("target", help="Raw little-endian ARM64 code bytes (not a Mach-O file)")
     emu_cmd.add_argument("--max-instructions", type=int, default=1_000_000)
@@ -75,6 +80,17 @@ def main(argv: list[str] | None = None) -> int:
         if report.inspection:
             _print_inspection(report.inspection)
         return 0 if report.engine.success else 3
+    if args.command == "translate-code":
+        try:
+            assembly = translate_raw_file(args.target, function_name=args.function_name)
+            output = Path(args.output) if args.output else Path(args.target).with_suffix(".x86_64.s")
+            output.write_text(assembly, encoding="utf-8")
+        except (FileNotFoundError, ValueError, UnsupportedInstruction, OSError) as exc:
+            print(f"Translation stopped: {exc}", file=sys.stderr)
+            return 2
+        print(f"Wrote x86-64 assembly: {output}")
+        print("Note: only the supported straight-line instruction subset was translated; this is not a full app converter.")
+        return 0
     if args.command == "emulate-code":
         try:
             report = emulate_raw_file(args.target, max_instructions=args.max_instructions)
@@ -89,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
         if report.stderr:
             print(report.stderr, end="", file=sys.stderr)
         if report.trace:
-            print("\\nTrace:")
+            print("\nTrace:")
             print("\\n".join(report.trace))
         return 0 if report.stopped_reason in ("returned", "guest called exit") else 3
     if args.command == "lab":
