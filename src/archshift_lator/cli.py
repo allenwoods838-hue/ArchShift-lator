@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 
 from . import __version__
+from .doctor import collect_diagnostics
 from .arm64 import UnsupportedInstruction, run_words
 from .fallback import inspect_target, run_with_fallback
 from .unicorn_backend import RuntimeUnavailable, emulate_raw_file
@@ -50,9 +51,14 @@ def main(argv: list[str] | None = None) -> int:
     emu_cmd = sub.add_parser("emulate-code", help="Execute a raw AArch64 machine-code blob with Unicorn")
     emu_cmd.add_argument("target", help="Raw little-endian ARM64 code bytes (not a Mach-O file)")
     emu_cmd.add_argument("--max-instructions", type=int, default=1_000_000)
+    sub.add_parser("doctor", help="Check native runtime, host, dyld, and sysroot readiness")
     sub.add_parser("gui", help="Open the desktop UI")
     args = parser.parse_args(argv)
 
+    if args.command == "doctor":
+        for label, value in collect_diagnostics():
+            print(f"{label}: {value}")
+        return 0
     if args.command == "gui":
         from .gui import launch
         launch()
