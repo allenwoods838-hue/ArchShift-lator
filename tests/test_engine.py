@@ -14,7 +14,7 @@ class EngineRoutingTests(unittest.TestCase):
             target = root / "guest"
             target.write_text("test guest")
             script = root / "external-engine"
-            script.write_text("#!/bin/sh\nprintf '%s' "$1"\n")
+            script.write_text('#!/bin/sh\nprintf "%s" "$1"\n')
             script.chmod(0o755)
             env = {"ARCHSHIFT_MACLATOR_COMMAND": f"{script} {{target}}", "PATH": ""}
             with patch.dict(os.environ, env, clear=True):
