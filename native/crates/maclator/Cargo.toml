@@ -1,0 +1,14 @@
+[package]
+name = "maclator"
+version = "0.1.0"
+edition = "2021"
+autobins = false
+
+[dependencies]
+maclator-core = { path = "../core" }
+libc = "0.2"
+iced-x86 = { version = "1.21", default-features = false, features = ["std", "code_asm", "encoder", "block_encoder"] }
+
+[[bin]]
+name = "archshift-lator-native"
+path = "src/main.rs"
