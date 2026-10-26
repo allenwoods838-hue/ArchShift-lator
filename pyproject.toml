@@ -11,6 +11,9 @@ requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = []
 
+[project.optional-dependencies]
+runtime = ["unicorn>=2.1.0"]
+
 [project.scripts]
 archshift-lator = "archshift_lator.cli:main"
 
