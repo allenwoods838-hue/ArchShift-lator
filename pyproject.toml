@@ -5,11 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "archshift-lator"
 version = "0.1.0"
-description = "Maclator-first compatibility frontend and experimental ARM64 fallback lab"
+description = "Hybrid Python front end and native ARM64 macOS runtime for Intel Macs"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = []
+
+[project.optional-dependencies]
+runtime = ["unicorn>=2.1.0"]
 
 [project.scripts]
 archshift-lator = "archshift_lator.cli:main"
