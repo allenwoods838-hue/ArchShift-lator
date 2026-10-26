@@ -93,7 +93,7 @@ def emulate_raw_arm64(
         # SVC #0x80 is Darwin's conventional ARM64 syscall trap.
         raw = bytes(machine.mem_read(address, 4))
         word = int.from_bytes(raw, "little")
-        if (word & 0xFFE0001F) != 0xD4001001:
+        if (word & 0xFFE0001F) != 0xD4000001 or ((word >> 5) & 0xFFFF) != 0x80:
             return
         syscall = machine.reg_read(UC_ARM64_REG_X16)
         a0 = machine.reg_read(UC_ARM64_REG_X0)
