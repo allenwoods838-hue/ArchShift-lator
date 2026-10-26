@@ -15,7 +15,7 @@ def launch() -> None:
 
     chosen = tk.StringVar()
     ttk.Label(root, text="ArchShift-lator", font=("TkDefaultFont", 18, "bold")).pack(anchor="w", padx=16, pady=(16, 2))
-    ttk.Label(root, text="Maclator-first routing with an experimental Python fallback").pack(anchor="w", padx=16, pady=(0, 12))
+    ttk.Label(root, text="Native engine routing, ARM64 inspection, and experimental translation tools").pack(anchor="w", padx=16, pady=(0, 12))
     row = ttk.Frame(root)
     row.pack(fill="x", padx=16)
     ttk.Entry(row, textvariable=chosen).pack(side="left", fill="x", expand=True)
