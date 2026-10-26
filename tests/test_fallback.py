@@ -22,7 +22,7 @@ class FallbackTests(unittest.TestCase):
             self.assertFalse(report.engine.success)
             self.assertIsNotNone(report.inspection)
             self.assertTrue(report.inspection.has_arm64)
-            self.assertIn("cannot yet", report.message)
+            self.assertIn("did not complete successfully", report.message)
 
 
 if __name__ == "__main__":
