@@ -37,9 +37,20 @@ The fallback does not silently execute an ARM64 app, rewrite the bundle, remove 
     archshift-lator inspect TARGET
     archshift-lator run TARGET
     archshift-lator lab d28000a0 91000400 d65f03c0
+    archshift-lator translate-code raw-arm64.bin -o translated.s
     archshift-lator emulate-code raw-arm64.bin
     archshift-lator gui
 
+
+
+## ARM64-to-x86-64 translation prototype
+
+`translate-code` reads a **raw ARM64 instruction blob**, translates the currently supported linear subset (NOP, MOVZ, ADD/SUB immediate, and RET X30), and writes Intel-syntax x86-64 assembly. It creates a callable function wrapper that can be assembled on an x86-64 host. Instructions outside the subset are rejected instead of being guessed.
+
+    archshift-lator translate-code ./snippet.arm64.bin -o ./snippet.x86_64.s
+    cc -shared -fPIC ./snippet.x86_64.s -o ./snippet.so
+
+This demonstrates real translation for small code sequences, but is not a Mach-O application converter. The full runtime still requires branch/call translation, memory and exception handling, dyld and shared-cache loading, syscall/trap emulation, threading, ABI integration, framework compatibility, and extensive conformance tests.
 
 ## Expanded CPU execution prototype
 
