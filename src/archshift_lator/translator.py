@@ -82,7 +82,7 @@ def translate_words(words: list[int], function_name: str = "archshift_guest") ->
             continue
 
         # ADD/SUB (immediate), without flag updates. SP/ZR operands excluded.
-        if (word & 0x1F000000) == 0x11000000:
+        if (word & 0x1F000000) == 0x11000000 and not (word & (1 << 29)):
             is64 = bool(word & 0x80000000)
             width = 64 if is64 else 32
             subtract = bool(word & (1 << 30))
@@ -122,7 +122,6 @@ def translate_words(words: list[int], function_name: str = "archshift_guest") ->
 
     if not saw_ret:
         raise UnsupportedInstruction("Block has no RET X30; control-flow exits are not supported yet")
-    lines.append(f".size {function_name}, .-{function_name}")
     return "\n".join(lines) + "\n"
 
 
