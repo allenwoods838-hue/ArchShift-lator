@@ -7,6 +7,7 @@ import sys
 from . import __version__
 from .arm64 import UnsupportedInstruction, run_words
 from .fallback import inspect_target, run_with_fallback
+from .unicorn_backend import RuntimeUnavailable, emulate_raw_file
 
 
 def _print_inspection(report) -> None:
@@ -41,6 +42,9 @@ def main(argv: list[str] | None = None) -> int:
     run_cmd.add_argument("target")
     lab_cmd = sub.add_parser("lab", help="Run supported ARM64 instruction words in the lab")
     lab_cmd.add_argument("words", nargs="+", help="32-bit instruction words in hexadecimal")
+    emu_cmd = sub.add_parser("emulate-code", help="Execute a raw AArch64 machine-code blob with Unicorn")
+    emu_cmd.add_argument("target", help="Raw little-endian ARM64 code bytes (not a Mach-O file)")
+    emu_cmd.add_argument("--max-instructions", type=int, default=1_000_000)
     sub.add_parser("gui", help="Open the desktop UI")
     args = parser.parse_args(argv)
 
@@ -71,6 +75,23 @@ def main(argv: list[str] | None = None) -> int:
         if report.inspection:
             _print_inspection(report.inspection)
         return 0 if report.engine.success else 3
+    if args.command == "emulate-code":
+        try:
+            report = emulate_raw_file(args.target, max_instructions=args.max_instructions)
+        except (FileNotFoundError, ValueError, RuntimeUnavailable, RuntimeError) as exc:
+            print(f"Emulation unavailable: {exc}", file=sys.stderr)
+            return 2
+        print(f"Stop reason: {report.stopped_reason}")
+        print(f"Instructions: {report.instruction_count}")
+        print(f"Exit code: {report.exit_code}")
+        if report.stdout:
+            print(report.stdout, end="")
+        if report.stderr:
+            print(report.stderr, end="", file=sys.stderr)
+        if report.trace:
+            print("\\nTrace:")
+            print("\\n".join(report.trace))
+        return 0 if report.stopped_reason in ("returned", "guest called exit") else 3
     if args.command == "lab":
         try:
             words = [int(word, 16) for word in args.words]
